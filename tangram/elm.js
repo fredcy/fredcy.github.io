@@ -7395,6 +7395,176 @@ var _elm_lang$html$Html_App$beginnerProgram = function (_p1) {
 };
 var _elm_lang$html$Html_App$map = _elm_lang$virtual_dom$VirtualDom$map;
 
+var _elm_lang$keyboard$Keyboard$onSelfMsg = F3(
+	function (router, _p0, state) {
+		var _p1 = _p0;
+		var _p2 = A2(_elm_lang$core$Dict$get, _p1.category, state);
+		if (_p2.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			var send = function (tagger) {
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					tagger(_p1.keyCode));
+			};
+			return A2(
+				_elm_lang$core$Task$andThen,
+				_elm_lang$core$Task$sequence(
+					A2(_elm_lang$core$List$map, send, _p2._0.taggers)),
+				function (_p3) {
+					return _elm_lang$core$Task$succeed(state);
+				});
+		}
+	});
+var _elm_lang$keyboard$Keyboard_ops = _elm_lang$keyboard$Keyboard_ops || {};
+_elm_lang$keyboard$Keyboard_ops['&>'] = F2(
+	function (t1, t2) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			t1,
+			function (_p4) {
+				return t2;
+			});
+	});
+var _elm_lang$keyboard$Keyboard$init = _elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty);
+var _elm_lang$keyboard$Keyboard$categorizeHelpHelp = F2(
+	function (value, maybeValues) {
+		var _p5 = maybeValues;
+		if (_p5.ctor === 'Nothing') {
+			return _elm_lang$core$Maybe$Just(
+				_elm_lang$core$Native_List.fromArray(
+					[value]));
+		} else {
+			return _elm_lang$core$Maybe$Just(
+				A2(_elm_lang$core$List_ops['::'], value, _p5._0));
+		}
+	});
+var _elm_lang$keyboard$Keyboard$categorizeHelp = F2(
+	function (subs, subDict) {
+		categorizeHelp:
+		while (true) {
+			var _p6 = subs;
+			if (_p6.ctor === '[]') {
+				return subDict;
+			} else {
+				var _v4 = _p6._1,
+					_v5 = A3(
+					_elm_lang$core$Dict$update,
+					_p6._0._0,
+					_elm_lang$keyboard$Keyboard$categorizeHelpHelp(_p6._0._1),
+					subDict);
+				subs = _v4;
+				subDict = _v5;
+				continue categorizeHelp;
+			}
+		}
+	});
+var _elm_lang$keyboard$Keyboard$categorize = function (subs) {
+	return A2(_elm_lang$keyboard$Keyboard$categorizeHelp, subs, _elm_lang$core$Dict$empty);
+};
+var _elm_lang$keyboard$Keyboard$keyCode = A2(_elm_lang$core$Json_Decode_ops[':='], 'keyCode', _elm_lang$core$Json_Decode$int);
+var _elm_lang$keyboard$Keyboard$subscription = _elm_lang$core$Native_Platform.leaf('Keyboard');
+var _elm_lang$keyboard$Keyboard$Watcher = F2(
+	function (a, b) {
+		return {taggers: a, pid: b};
+	});
+var _elm_lang$keyboard$Keyboard$Msg = F2(
+	function (a, b) {
+		return {category: a, keyCode: b};
+	});
+var _elm_lang$keyboard$Keyboard$onEffects = F3(
+	function (router, newSubs, oldState) {
+		var rightStep = F3(
+			function (category, taggers, task) {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					task,
+					function (state) {
+						return A2(
+							_elm_lang$core$Task$andThen,
+							_elm_lang$core$Process$spawn(
+								A3(
+									_elm_lang$dom$Dom_LowLevel$onDocument,
+									category,
+									_elm_lang$keyboard$Keyboard$keyCode,
+									function (_p7) {
+										return A2(
+											_elm_lang$core$Platform$sendToSelf,
+											router,
+											A2(_elm_lang$keyboard$Keyboard$Msg, category, _p7));
+									})),
+							function (pid) {
+								return _elm_lang$core$Task$succeed(
+									A3(
+										_elm_lang$core$Dict$insert,
+										category,
+										A2(_elm_lang$keyboard$Keyboard$Watcher, taggers, pid),
+										state));
+							});
+					});
+			});
+		var bothStep = F4(
+			function (category, _p8, taggers, task) {
+				var _p9 = _p8;
+				return A2(
+					_elm_lang$core$Task$andThen,
+					task,
+					function (state) {
+						return _elm_lang$core$Task$succeed(
+							A3(
+								_elm_lang$core$Dict$insert,
+								category,
+								A2(_elm_lang$keyboard$Keyboard$Watcher, taggers, _p9.pid),
+								state));
+					});
+			});
+		var leftStep = F3(
+			function (category, _p10, task) {
+				var _p11 = _p10;
+				return A2(
+					_elm_lang$keyboard$Keyboard_ops['&>'],
+					_elm_lang$core$Process$kill(_p11.pid),
+					task);
+			});
+		return A6(
+			_elm_lang$core$Dict$merge,
+			leftStep,
+			bothStep,
+			rightStep,
+			oldState,
+			_elm_lang$keyboard$Keyboard$categorize(newSubs),
+			_elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty));
+	});
+var _elm_lang$keyboard$Keyboard$MySub = F2(
+	function (a, b) {
+		return {ctor: 'MySub', _0: a, _1: b};
+	});
+var _elm_lang$keyboard$Keyboard$presses = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keypress', tagger));
+};
+var _elm_lang$keyboard$Keyboard$downs = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keydown', tagger));
+};
+var _elm_lang$keyboard$Keyboard$ups = function (tagger) {
+	return _elm_lang$keyboard$Keyboard$subscription(
+		A2(_elm_lang$keyboard$Keyboard$MySub, 'keyup', tagger));
+};
+var _elm_lang$keyboard$Keyboard$subMap = F2(
+	function (func, _p12) {
+		var _p13 = _p12;
+		return A2(
+			_elm_lang$keyboard$Keyboard$MySub,
+			_p13._0,
+			function (_p14) {
+				return func(
+					_p13._1(_p14));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['Keyboard'] = {pkg: 'elm-lang/keyboard', init: _elm_lang$keyboard$Keyboard$init, onEffects: _elm_lang$keyboard$Keyboard$onEffects, onSelfMsg: _elm_lang$keyboard$Keyboard$onSelfMsg, tag: 'sub', subMap: _elm_lang$keyboard$Keyboard$subMap};
+
 var _elm_lang$mouse$Mouse$onSelfMsg = F3(
 	function (router, _p0, state) {
 		var _p1 = _p0;
@@ -7925,6 +8095,10 @@ var _elm_lang$svg$Svg_Attributes$accumulate = _elm_lang$virtual_dom$VirtualDom$a
 var _elm_lang$svg$Svg_Attributes$accelerate = _elm_lang$virtual_dom$VirtualDom$attribute('accelerate');
 var _elm_lang$svg$Svg_Attributes$accentHeight = _elm_lang$virtual_dom$VirtualDom$attribute('accent-height');
 
+var _elm_lang$svg$Svg_Lazy$lazy3 = _elm_lang$virtual_dom$VirtualDom$lazy3;
+var _elm_lang$svg$Svg_Lazy$lazy2 = _elm_lang$virtual_dom$VirtualDom$lazy2;
+var _elm_lang$svg$Svg_Lazy$lazy = _elm_lang$virtual_dom$VirtualDom$lazy;
+
 var _elm_lang$window$Native_Window = function()
 {
 
@@ -8076,179 +8250,14 @@ var _user$project$Colors$elmOrange = A3(_elm_lang$core$Color$rgb, 239, 165, 0);
 var _user$project$Colors$elmTurquoise = A3(_elm_lang$core$Color$rgb, 96, 181, 204);
 var _user$project$Colors$elmGreen = A3(_elm_lang$core$Color$rgb, 141, 215, 55);
 
-var _user$project$Keyboard$onSelfMsg = F3(
-	function (router, _p0, state) {
-		var _p1 = _p0;
-		var _p2 = A2(_elm_lang$core$Dict$get, _p1.category, state);
-		if (_p2.ctor === 'Nothing') {
-			return _elm_lang$core$Task$succeed(state);
-		} else {
-			var send = function (tagger) {
-				return A2(
-					_elm_lang$core$Platform$sendToApp,
-					router,
-					tagger(_p1.keycode));
-			};
-			return A2(
-				_elm_lang$core$Task$andThen,
-				_elm_lang$core$Task$sequence(
-					A2(_elm_lang$core$List$map, send, _p2._0.taggers)),
-				function (_p3) {
-					return _elm_lang$core$Task$succeed(state);
-				});
-		}
-	});
-var _user$project$Keyboard_ops = _user$project$Keyboard_ops || {};
-_user$project$Keyboard_ops['&>'] = F2(
-	function (t1, t2) {
-		return A2(
-			_elm_lang$core$Task$andThen,
-			t1,
-			function (_p4) {
-				return t2;
-			});
-	});
-var _user$project$Keyboard$init = _elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty);
-var _user$project$Keyboard$categorizeHelpHelp = F2(
-	function (value, maybeValues) {
-		var _p5 = maybeValues;
-		if (_p5.ctor === 'Nothing') {
-			return _elm_lang$core$Maybe$Just(
-				_elm_lang$core$Native_List.fromArray(
-					[value]));
-		} else {
-			return _elm_lang$core$Maybe$Just(
-				A2(_elm_lang$core$List_ops['::'], value, _p5._0));
-		}
-	});
-var _user$project$Keyboard$categorizeHelp = F2(
-	function (subs, subDict) {
-		categorizeHelp:
-		while (true) {
-			var _p6 = subs;
-			if (_p6.ctor === '[]') {
-				return subDict;
-			} else {
-				var _v4 = _p6._1,
-					_v5 = A3(
-					_elm_lang$core$Dict$update,
-					_p6._0._0,
-					_user$project$Keyboard$categorizeHelpHelp(_p6._0._1),
-					subDict);
-				subs = _v4;
-				subDict = _v5;
-				continue categorizeHelp;
-			}
-		}
-	});
-var _user$project$Keyboard$categorize = function (subs) {
-	return A2(_user$project$Keyboard$categorizeHelp, subs, _elm_lang$core$Dict$empty);
-};
-var _user$project$Keyboard$keycode = A2(_elm_lang$core$Json_Decode_ops[':='], 'keyCode', _elm_lang$core$Json_Decode$int);
-var _user$project$Keyboard$subscription = _elm_lang$core$Native_Platform.leaf('Keyboard');
-var _user$project$Keyboard$Watcher = F2(
-	function (a, b) {
-		return {taggers: a, pid: b};
-	});
-var _user$project$Keyboard$Msg = F2(
-	function (a, b) {
-		return {category: a, keycode: b};
-	});
-var _user$project$Keyboard$onEffects = F3(
-	function (router, newSubs, oldState) {
-		var rightStep = F3(
-			function (category, taggers, task) {
-				return A2(
-					_elm_lang$core$Task$andThen,
-					task,
-					function (state) {
-						return A2(
-							_elm_lang$core$Task$andThen,
-							_elm_lang$core$Process$spawn(
-								A3(
-									_elm_lang$dom$Dom_LowLevel$onDocument,
-									category,
-									_user$project$Keyboard$keycode,
-									function (_p7) {
-										return A2(
-											_elm_lang$core$Platform$sendToSelf,
-											router,
-											A2(_user$project$Keyboard$Msg, category, _p7));
-									})),
-							function (pid) {
-								return _elm_lang$core$Task$succeed(
-									A3(
-										_elm_lang$core$Dict$insert,
-										category,
-										A2(_user$project$Keyboard$Watcher, taggers, pid),
-										state));
-							});
-					});
-			});
-		var bothStep = F4(
-			function (category, _p8, taggers, task) {
-				var _p9 = _p8;
-				return A2(
-					_elm_lang$core$Task$andThen,
-					task,
-					function (state) {
-						return _elm_lang$core$Task$succeed(
-							A3(
-								_elm_lang$core$Dict$insert,
-								category,
-								A2(_user$project$Keyboard$Watcher, taggers, _p9.pid),
-								state));
-					});
-			});
-		var leftStep = F3(
-			function (category, _p10, task) {
-				var _p11 = _p10;
-				return A2(
-					_user$project$Keyboard_ops['&>'],
-					_elm_lang$core$Process$kill(_p11.pid),
-					task);
-			});
-		return A6(
-			_elm_lang$core$Dict$merge,
-			leftStep,
-			bothStep,
-			rightStep,
-			oldState,
-			_user$project$Keyboard$categorize(newSubs),
-			_elm_lang$core$Task$succeed(_elm_lang$core$Dict$empty));
-	});
-var _user$project$Keyboard$MySub = F2(
-	function (a, b) {
-		return {ctor: 'MySub', _0: a, _1: b};
-	});
-var _user$project$Keyboard$keydowns = function (tagger) {
-	return _user$project$Keyboard$subscription(
-		A2(_user$project$Keyboard$MySub, 'keydown', tagger));
-};
-var _user$project$Keyboard$keyups = function (tagger) {
-	return _user$project$Keyboard$subscription(
-		A2(_user$project$Keyboard$MySub, 'keyup', tagger));
-};
-var _user$project$Keyboard$subMap = F2(
-	function (func, _p12) {
-		var _p13 = _p12;
-		return A2(
-			_user$project$Keyboard$MySub,
-			_p13._0,
-			function (_p14) {
-				return func(
-					_p13._1(_p14));
-			});
-	});
-_elm_lang$core$Native_Platform.effectManagers['Keyboard'] = {pkg: 'user/project', init: _user$project$Keyboard$init, onEffects: _user$project$Keyboard$onEffects, onSelfMsg: _user$project$Keyboard$onSelfMsg, tag: 'sub', subMap: _user$project$Keyboard$subMap};
-
 var _user$project$Piece_Types$Position = F2(
 	function (a, b) {
 		return {x: a, y: b};
 	});
-var _user$project$Piece_Types$Context = function (a) {
-	return {shift: a};
-};
+var _user$project$Piece_Types$Context = F2(
+	function (a, b) {
+		return {shift: a, size: b};
+	});
 var _user$project$Piece_Types$Rotating = function (a) {
 	return {ctor: 'Rotating', _0: a};
 };
@@ -8357,6 +8366,15 @@ var _user$project$Piece_Model$init = F3(
 			_elm_lang$core$Maybe$Nothing);
 	});
 
+var _user$project$Piece_Update$restrictTo = F2(
+	function (_p1, _p0) {
+		var _p2 = _p1;
+		var _p3 = _p0;
+		return {
+			x: A3(_elm_lang$core$Basics$clamp, 0, _p2.width, _p3.x),
+			y: A3(_elm_lang$core$Basics$clamp, 0, _p2.height, _p3.y)
+		};
+	});
 var _user$project$Piece_Update$distance = F2(
 	function (p1, p2) {
 		return _elm_lang$core$Basics$sqrt(
@@ -8368,44 +8386,44 @@ var _user$project$Piece_Update$distance = F2(
 	});
 var _user$project$Piece_Update$updateHelp = F3(
 	function (context, msg, model) {
-		var _p0 = msg;
-		switch (_p0.ctor) {
+		var _p4 = msg;
+		switch (_p4.ctor) {
 			case 'DragStart':
-				var _p1 = _p0._0;
+				var _p5 = _p4._0;
 				return context.shift ? _elm_lang$core$Native_Utils.update(
 					model,
 					{
 						drag: _elm_lang$core$Maybe$Just(
 							_user$project$Piece_Types$Rotating(
-								{start: _p1, current: _p1, sample: _elm_lang$core$Maybe$Nothing}))
+								{start: _p5, current: _p5, sample: _elm_lang$core$Maybe$Nothing}))
 					}) : _elm_lang$core$Native_Utils.update(
 					model,
 					{
 						drag: _elm_lang$core$Maybe$Just(
 							_user$project$Piece_Types$Dragging(
-								{start: _p1, current: _p1}))
+								{start: _p5, current: _p5}))
 					});
 			case 'DragAt':
-				var _p4 = _p0._0;
+				var _p8 = _p4._0;
 				var drag = function () {
-					var _p2 = model.drag;
-					if (_p2.ctor === 'Nothing') {
+					var _p6 = model.drag;
+					if (_p6.ctor === 'Nothing') {
 						return A2(_elm_lang$core$Debug$log, 'bogus drag when not dragging?', _elm_lang$core$Maybe$Nothing);
 					} else {
-						if (_p2._0.ctor === 'Dragging') {
+						if (_p6._0.ctor === 'Dragging') {
 							return _elm_lang$core$Maybe$Just(
 								_user$project$Piece_Types$Dragging(
-									{start: _p2._0._0.start, current: _p4}));
+									{start: _p6._0._0.start, current: _p8}));
 						} else {
-							var _p3 = _p2._0._0;
-							var sample = (_elm_lang$core$Native_Utils.eq(_p3.sample, _elm_lang$core$Maybe$Nothing) && (_elm_lang$core$Native_Utils.cmp(
-								A2(_user$project$Piece_Update$distance, _p3.start, _p4),
-								20) > 0)) ? _elm_lang$core$Maybe$Just(_p4) : _p3.sample;
+							var _p7 = _p6._0._0;
+							var sample = (_elm_lang$core$Native_Utils.eq(_p7.sample, _elm_lang$core$Maybe$Nothing) && (_elm_lang$core$Native_Utils.cmp(
+								A2(_user$project$Piece_Update$distance, _p7.start, _p8),
+								20) > 0)) ? _elm_lang$core$Maybe$Just(_p8) : _p7.sample;
 							return _elm_lang$core$Maybe$Just(
 								_user$project$Piece_Types$Rotating(
 									_elm_lang$core$Native_Utils.update(
-										_p3,
-										{current: _p4, sample: sample})));
+										_p7,
+										{current: _p8, sample: sample})));
 						}
 					}
 				}();
@@ -8416,7 +8434,10 @@ var _user$project$Piece_Update$updateHelp = F3(
 				return _elm_lang$core$Native_Utils.update(
 					model,
 					{
-						position: _user$project$Piece_Model$getPosition(model),
+						position: A2(
+							_user$project$Piece_Update$restrictTo,
+							context.size,
+							_user$project$Piece_Model$getPosition(model)),
 						rotation: _user$project$Piece_Model$getRotation(model),
 						drag: _elm_lang$core$Maybe$Nothing
 					});
@@ -8500,9 +8521,9 @@ var _user$project$Piece_View$polygon = F6(
 					_user$project$Piece_View$pointsToString(vertices)),
 					_elm_lang$svg$Svg_Attributes$fill(
 					_user$project$Colors$toCss(color)),
-					_elm_lang$svg$Svg_Attributes$stroke('gray'),
+					_elm_lang$svg$Svg_Attributes$stroke('lightgray'),
 					_elm_lang$svg$Svg_Attributes$strokeWidth(
-					_elm_lang$core$Basics$toString(8)),
+					_elm_lang$core$Basics$toString(6)),
 					_elm_lang$svg$Svg_Attributes$strokeLinejoin('round'),
 					_elm_lang$svg$Svg_Attributes$cursor(cursorVal)
 				]),
@@ -8748,7 +8769,7 @@ var _user$project$Update$update = F2(
 		var _p8 = msg;
 		switch (_p8.ctor) {
 			case 'PieceMsg':
-				var context = {shift: model.shift};
+				var context = {shift: model.shift, size: model.size};
 				var _p9 = A4(_user$project$Update$updatePieces, _p8._0, _p8._1, context, model.pieces);
 				var pieces$ = _p9._0;
 				var cmds = _p9._1;
@@ -8851,7 +8872,7 @@ var _user$project$View$background = F3(
 					_elm_lang$core$Basics$toString(w)),
 					_elm_lang$svg$Svg_Attributes$height(
 					_elm_lang$core$Basics$toString(h)),
-					_elm_lang$svg$Svg_Attributes$fill('#EEEEEE'),
+					_elm_lang$svg$Svg_Attributes$fill('#F0F0F0'),
 					_elm_lang$svg$Svg_Attributes$cursor(cursorV)
 				]),
 			_elm_lang$core$Native_List.fromArray(
@@ -8876,12 +8897,16 @@ var _user$project$View$scene = function (model) {
 			]),
 		A2(
 			_elm_lang$core$List_ops['::'],
-			A3(
+			A4(
+				_elm_lang$svg$Svg_Lazy$lazy3,
 				_user$project$View$background,
 				_user$project$View$cursorVal(model),
 				model.size.width,
 				model.size.height),
-			A2(_elm_lang$core$List$map, _user$project$View$pieceView, model.pieces)));
+			A2(
+				_elm_lang$core$List$map,
+				_elm_lang$svg$Svg_Lazy$lazy(_user$project$View$pieceView),
+				model.pieces)));
 };
 var _user$project$View$view = function (model) {
 	return A2(
@@ -8896,7 +8921,7 @@ var _user$project$View$view = function (model) {
 					[]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						_elm_lang$html$Html$text('SVG drag and drop')
+						_elm_lang$html$Html$text('Elm drag&drop with SVG')
 					])),
 				A2(
 				_elm_lang$html$Html$div,
@@ -8911,8 +8936,8 @@ var _user$project$View$view = function (model) {
 };
 
 var _user$project$Main$subscriptions = function (model) {
-	var keyUps = _user$project$Keyboard$keyups(_user$project$Types$KeyUp);
-	var keyDowns = _user$project$Keyboard$keydowns(_user$project$Types$KeyDown);
+	var keyUps = _elm_lang$keyboard$Keyboard$ups(_user$project$Types$KeyUp);
+	var keyDowns = _elm_lang$keyboard$Keyboard$downs(_user$project$Types$KeyDown);
 	var reSize = _elm_lang$window$Window$resizes(_user$project$Types$WindowSize);
 	var mapSubs = function (_p0) {
 		var _p1 = _p0;
