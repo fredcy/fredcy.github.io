@@ -26,7 +26,7 @@ loop update view subscriptions model cmds =
             runtime Display (view model)
 
         msg =
-            waitForMessage
+            runtime WaitForMessage ()
 
         ( model', cmds' ) =
             update msg model
