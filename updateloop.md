@@ -5,6 +5,13 @@ layout: page
 
 Here is a simplified model of how an Elm 0.17 program operates.
 
+The `update` function blocks waiting for the next incoming `Msg`. When received it creates a new model value. The `view` and `subscriptions` functions then run against the new model value, then `update` waits for the next Msg.
+
+
+<!-- https://www.lucidchart.com/documents/edit/e84d384b-ff47-4549-bb18-df124af6bbae -->
+
+![update loop](updateloop.png)
+
 ```haskell
 program init update view subscriptions =
     let
@@ -17,13 +24,13 @@ program init update view subscriptions =
 loop update view subscriptions model cmds =
     let
         _ =
-            Run cmds |> runtime
+            cmds |> RunCmds |> runtime
 
         _ =
-            Register (subscriptions model) |> runtime
+            view model |> DisplayHtml |> runtime
 
         _ =
-            Display (view model) |> runtime
+            subscriptions model |> RegisterSubs |> runtime
 
         msg =
             WaitForMessage |> runtime
