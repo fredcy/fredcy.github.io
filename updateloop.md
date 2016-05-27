@@ -5,7 +5,7 @@ layout: page
 
 Here is a simplified model of how an Elm 0.17 program operates.
 
-The `update` function blocks waiting for the next incoming `Msg`. When received it creates a new model value. The `view` and `subscriptions` functions then run against the new model value, then `update` waits for the next Msg.
+The `update` function blocks waiting for the next incoming `Msg`. When received it creates a new model value and commands. The `view` and `subscriptions` functions then run against the new model value, producing new `Html Msg` and `Sub Msg` values, respectively. Then `update` waits for the next Msg.
 
 
 <!-- https://www.lucidchart.com/documents/edit/e84d384b-ff47-4549-bb18-df124af6bbae -->
