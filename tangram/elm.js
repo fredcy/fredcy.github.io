@@ -3371,10 +3371,11 @@ function toEffect(isCmd, home, taggers, value)
 {
 	function applyTaggers(x)
 	{
-		while (taggers)
+		var temp = taggers;
+		while (temp)
 		{
-			x = taggers.tagger(x);
-			taggers = taggers.rest;
+			x = temp.tagger(x);
+			temp = temp.rest;
 		}
 		return x;
 	}
@@ -5697,7 +5698,10 @@ function badOneOf(problems)
 	return { tag: 'oneOf', problems: problems };
 }
 
-var bad = { tag: 'fail' };
+function bad(msg)
+{
+	return { tag: 'fail', msg: msg };
+}
 
 function badToString(problem)
 {
@@ -5733,7 +5737,8 @@ function badToString(problem)
 
 			case 'fail':
 				return 'I ran into a `fail` decoder'
-					+ (context === '_' ? '' : ' at ' + context);
+					+ (context === '_' ? '' : ' at ' + context)
+					+ ': ' + problem.msg;
 		}
 	}
 }
@@ -5780,14 +5785,19 @@ function runHelp(decoder, value)
 				: badPrimitive('a Bool', value);
 
 		case 'int':
-			var isNotInt =
-				typeof value !== 'number'
-				|| !(-2147483647 < value && value < 2147483647 && (value | 0) === value)
-				|| !(isFinite(value) && !(value % 1));
+			if (typeof value !== 'number') {
+				return badPrimitive('an Int', value);
+			}
 
-			return isNotInt
-				? badPrimitive('an Int', value)
-				: ok(value);
+			if (-2147483647 < value && value < 2147483647 && (value | 0) === value) {
+				return ok(value);
+			}
+
+			if (isFinite(value) && !(value % 1)) {
+				return ok(value);
+			}
+
+			return badPrimitive('an Int', value);
 
 		case 'float':
 			return (typeof value === 'number')
@@ -5867,7 +5877,7 @@ function runHelp(decoder, value)
 		case 'key-value':
 			if (typeof value !== 'object' || value === null || value instanceof Array)
 			{
-				return err('an object', value);
+				return badPrimitive('an object', value);
 			}
 
 			var keyValuePairs = _elm_lang$core$Native_List.Nil;
@@ -5956,7 +5966,7 @@ function runHelp(decoder, value)
 			return badOneOf(errors);
 
 		case 'fail':
-			return bad;
+			return bad(decoder.msg);
 
 		case 'succeed':
 			return ok(decoder.msg);
@@ -6535,11 +6545,24 @@ function render(vNode, eventNode)
 			return render(vNode.node, eventNode);
 
 		case 'tagger':
+			var subNode = vNode.node;
+			var tagger = vNode.tagger;
+		
+			while (subNode.type === 'tagger')
+			{
+				typeof tagger !== 'object'
+					? tagger = [tagger, subNode.tagger]
+					: tagger.push(subNode.tagger);
+
+				subNode = subNode.node;
+			}
+            
 			var subEventRoot = {
-				tagger: vNode.tagger,
+				tagger: tagger,
 				parent: eventNode
 			};
-			var domNode = render(vNode.node, subEventRoot);
+			
+			var domNode = render(subNode, subEventRoot);
 			domNode.elm_event_node_ref = subEventRoot;
 			return domNode;
 
@@ -6634,6 +6657,7 @@ function applyEvents(domNode, eventNode, events)
 		if (typeof value === 'undefined')
 		{
 			domNode.removeEventListener(key, handler);
+			allHandlers[key] = undefined;
 		}
 		else if (typeof handler === 'undefined')
 		{
@@ -6949,10 +6973,7 @@ function diffFacts(a, b, category)
 				(category === STYLE_KEY)
 					? ''
 					:
-				(category === EVENT_KEY)
-					? null
-					:
-				(category === ATTR_KEY)
+				(category === EVENT_KEY || category === ATTR_KEY)
 					? undefined
 					:
 				{ namespace: a[aKey].namespace, value: undefined };
@@ -7067,7 +7088,14 @@ function addDomNodesHelp(domNode, vNode, patches, i, low, high, eventNode)
 	switch (vNode.type)
 	{
 		case 'tagger':
-			return addDomNodesHelp(domNode, vNode.node, patches, i, low + 1, high, domNode.elm_event_node_ref);
+			var subNode = vNode.node;
+            
+			while (subNode.type === "tagger")
+			{
+				subNode = subNode.node;
+			}
+            
+			return addDomNodesHelp(domNode, subNode, patches, i, low + 1, high, domNode.elm_event_node_ref);
 
 		case 'node':
 			var vChildren = vNode.children;
@@ -7179,10 +7207,9 @@ function redraw(domNode, vNode, eventNode)
 	var parentNode = domNode.parentNode;
 	var newNode = render(vNode, eventNode);
 
-	var ref = domNode.elm_event_node_ref
-	if (typeof ref !== 'undefined')
+	if (typeof newNode.elm_event_node_ref === 'undefined')
 	{
-		newNode.elm_event_node_ref = ref;
+		newNode.elm_event_node_ref = domNode.elm_event_node_ref;
 	}
 
 	if (parentNode && newNode !== domNode)
@@ -7394,6 +7421,107 @@ var _elm_lang$html$Html_App$beginnerProgram = function (_p1) {
 		});
 };
 var _elm_lang$html$Html_App$map = _elm_lang$virtual_dom$VirtualDom$map;
+
+var _elm_lang$html$Html_Events$keyCode = A2(_elm_lang$core$Json_Decode_ops[':='], 'keyCode', _elm_lang$core$Json_Decode$int);
+var _elm_lang$html$Html_Events$targetChecked = A2(
+	_elm_lang$core$Json_Decode$at,
+	_elm_lang$core$Native_List.fromArray(
+		['target', 'checked']),
+	_elm_lang$core$Json_Decode$bool);
+var _elm_lang$html$Html_Events$targetValue = A2(
+	_elm_lang$core$Json_Decode$at,
+	_elm_lang$core$Native_List.fromArray(
+		['target', 'value']),
+	_elm_lang$core$Json_Decode$string);
+var _elm_lang$html$Html_Events$defaultOptions = _elm_lang$virtual_dom$VirtualDom$defaultOptions;
+var _elm_lang$html$Html_Events$onWithOptions = _elm_lang$virtual_dom$VirtualDom$onWithOptions;
+var _elm_lang$html$Html_Events$on = _elm_lang$virtual_dom$VirtualDom$on;
+var _elm_lang$html$Html_Events$onFocus = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'focus',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onBlur = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'blur',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onSubmitOptions = _elm_lang$core$Native_Utils.update(
+	_elm_lang$html$Html_Events$defaultOptions,
+	{preventDefault: true});
+var _elm_lang$html$Html_Events$onSubmit = function (msg) {
+	return A3(
+		_elm_lang$html$Html_Events$onWithOptions,
+		'submit',
+		_elm_lang$html$Html_Events$onSubmitOptions,
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onCheck = function (tagger) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'change',
+		A2(_elm_lang$core$Json_Decode$map, tagger, _elm_lang$html$Html_Events$targetChecked));
+};
+var _elm_lang$html$Html_Events$onInput = function (tagger) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'input',
+		A2(_elm_lang$core$Json_Decode$map, tagger, _elm_lang$html$Html_Events$targetValue));
+};
+var _elm_lang$html$Html_Events$onMouseOut = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseout',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseOver = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseover',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseLeave = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseleave',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseEnter = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseenter',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseUp = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mouseup',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onMouseDown = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'mousedown',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onDoubleClick = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'dblclick',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$onClick = function (msg) {
+	return A2(
+		_elm_lang$html$Html_Events$on,
+		'click',
+		_elm_lang$core$Json_Decode$succeed(msg));
+};
+var _elm_lang$html$Html_Events$Options = F2(
+	function (a, b) {
+		return {stopPropagation: a, preventDefault: b};
+	});
 
 var _elm_lang$keyboard$Keyboard$onSelfMsg = F3(
 	function (router, _p0, state) {
@@ -8221,7 +8349,7 @@ var _elm_lang$window$Window$subMap = F2(
 	});
 _elm_lang$core$Native_Platform.effectManagers['Window'] = {pkg: 'elm-lang/window', init: _elm_lang$window$Window$init, onEffects: _elm_lang$window$Window$onEffects, onSelfMsg: _elm_lang$window$Window$onSelfMsg, tag: 'sub', subMap: _elm_lang$window$Window$subMap};
 
-var _user$project$Colors$toCss = function (color) {
+var _fredcy$elm_tangram_svg$Colors$toCss = function (color) {
 	var rgb = _elm_lang$core$Color$toRgb(color);
 	return A2(
 		_elm_lang$core$Basics_ops['++'],
@@ -8243,139 +8371,14 @@ var _user$project$Colors$toCss = function (color) {
 							_elm_lang$core$Basics$toString(rgb.blue),
 							')'))))));
 };
-var _user$project$Colors$white = _elm_lang$core$Color$white;
-var _user$project$Colors$red = A3(_elm_lang$core$Color$rgb, 255, 0, 0);
-var _user$project$Colors$elmGray = A3(_elm_lang$core$Color$rgb, 90, 99, 120);
-var _user$project$Colors$elmOrange = A3(_elm_lang$core$Color$rgb, 239, 165, 0);
-var _user$project$Colors$elmTurquoise = A3(_elm_lang$core$Color$rgb, 96, 181, 204);
-var _user$project$Colors$elmGreen = A3(_elm_lang$core$Color$rgb, 141, 215, 55);
+var _fredcy$elm_tangram_svg$Colors$white = _elm_lang$core$Color$white;
+var _fredcy$elm_tangram_svg$Colors$red = A3(_elm_lang$core$Color$rgb, 255, 0, 0);
+var _fredcy$elm_tangram_svg$Colors$elmGray = A3(_elm_lang$core$Color$rgb, 90, 99, 120);
+var _fredcy$elm_tangram_svg$Colors$elmOrange = A3(_elm_lang$core$Color$rgb, 239, 165, 0);
+var _fredcy$elm_tangram_svg$Colors$elmTurquoise = A3(_elm_lang$core$Color$rgb, 96, 181, 204);
+var _fredcy$elm_tangram_svg$Colors$elmGreen = A3(_elm_lang$core$Color$rgb, 141, 215, 55);
 
-var _user$project$Piece_Types$Position = F2(
-	function (a, b) {
-		return {x: a, y: b};
-	});
-var _user$project$Piece_Types$Context = F2(
-	function (a, b) {
-		return {shift: a, size: b};
-	});
-var _user$project$Piece_Types$Rotating = function (a) {
-	return {ctor: 'Rotating', _0: a};
-};
-var _user$project$Piece_Types$Dragging = function (a) {
-	return {ctor: 'Dragging', _0: a};
-};
-var _user$project$Piece_Types$DragEnd = function (a) {
-	return {ctor: 'DragEnd', _0: a};
-};
-var _user$project$Piece_Types$DragAt = function (a) {
-	return {ctor: 'DragAt', _0: a};
-};
-var _user$project$Piece_Types$DragStart = function (a) {
-	return {ctor: 'DragStart', _0: a};
-};
-var _user$project$Piece_Types$Parallelogram = F2(
-	function (a, b) {
-		return {ctor: 'Parallelogram', _0: a, _1: b};
-	});
-var _user$project$Piece_Types$Square = F2(
-	function (a, b) {
-		return {ctor: 'Square', _0: a, _1: b};
-	});
-var _user$project$Piece_Types$Triangle = F2(
-	function (a, b) {
-		return {ctor: 'Triangle', _0: a, _1: b};
-	});
-
-var _user$project$Piece_Model$subscriptions = function (model) {
-	var _p0 = model.drag;
-	if (_p0.ctor === 'Nothing') {
-		return _elm_lang$core$Platform_Sub$none;
-	} else {
-		return _elm_lang$core$Platform_Sub$batch(
-			_elm_lang$core$Native_List.fromArray(
-				[
-					_elm_lang$mouse$Mouse$moves(_user$project$Piece_Types$DragAt),
-					_elm_lang$mouse$Mouse$ups(_user$project$Piece_Types$DragEnd)
-				]));
-	}
-};
-var _user$project$Piece_Model$vectorDiff = F2(
-	function (v1, v2) {
-		return {x: v2.x - v1.x, y: v2.y - v1.y};
-	});
-var _user$project$Piece_Model$vectorAngle = function (v) {
-	return A2(
-		_elm_lang$core$Basics$atan2,
-		_elm_lang$core$Basics$toFloat(v.x),
-		_elm_lang$core$Basics$toFloat(v.y));
-};
-var _user$project$Piece_Model$relativeRotation = F3(
-	function (start, sample, current) {
-		var currentAngle = _user$project$Piece_Model$vectorAngle(
-			A2(_user$project$Piece_Model$vectorDiff, current, start));
-		var sampleAngle = _user$project$Piece_Model$vectorAngle(
-			A2(_user$project$Piece_Model$vectorDiff, sample, start));
-		return currentAngle - sampleAngle;
-	});
-var _user$project$Piece_Model$getRotation = function (_p1) {
-	var _p2 = _p1;
-	var _p5 = _p2.rotation;
-	var _p3 = _p2.drag;
-	if ((_p3.ctor === 'Just') && (_p3._0.ctor === 'Rotating')) {
-		var _p4 = _p3._0._0.sample;
-		if (_p4.ctor === 'Just') {
-			return _p5 - A3(_user$project$Piece_Model$relativeRotation, _p3._0._0.start, _p4._0, _p3._0._0.current);
-		} else {
-			return _p5;
-		}
-	} else {
-		return _p5;
-	}
-};
-var _user$project$Piece_Model$rotating = function (model) {
-	var _p6 = model.drag;
-	if ((_p6.ctor === 'Just') && (_p6._0.ctor === 'Rotating')) {
-		return true;
-	} else {
-		return false;
-	}
-};
-var _user$project$Piece_Model$getPosition = function (_p7) {
-	var _p8 = _p7;
-	var _p12 = _p8.position;
-	var _p9 = _p8.drag;
-	if ((_p9.ctor === 'Just') && (_p9._0.ctor === 'Dragging')) {
-		var _p11 = _p9._0._0.start;
-		var _p10 = _p9._0._0.current;
-		return A2(_user$project$Piece_Types$Position, (_p12.x + _p10.x) - _p11.x, (_p12.y + _p10.y) - _p11.y);
-	} else {
-		return _p12;
-	}
-};
-var _user$project$Piece_Model$Model = F4(
-	function (a, b, c, d) {
-		return {shape: a, position: b, rotation: c, drag: d};
-	});
-var _user$project$Piece_Model$init = F3(
-	function (shape, position, rotation) {
-		return A4(
-			_user$project$Piece_Model$Model,
-			shape,
-			position,
-			_elm_lang$core$Basics$degrees(rotation),
-			_elm_lang$core$Maybe$Nothing);
-	});
-
-var _user$project$Piece_Update$restrictTo = F2(
-	function (_p1, _p0) {
-		var _p2 = _p1;
-		var _p3 = _p0;
-		return {
-			x: A3(_elm_lang$core$Basics$clamp, 0, _p2.width, _p3.x),
-			y: A3(_elm_lang$core$Basics$clamp, 0, _p2.height, _p3.y)
-		};
-	});
-var _user$project$Piece_Update$distance = F2(
+var _fredcy$elm_tangram_svg$Piece_Types$distance = F2(
 	function (p1, p2) {
 		return _elm_lang$core$Basics$sqrt(
 			Math.pow(
@@ -8384,27 +8387,216 @@ var _user$project$Piece_Update$distance = F2(
 				_elm_lang$core$Basics$toFloat(p1.y - p2.y),
 				2));
 	});
-var _user$project$Piece_Update$updateHelp = F3(
+var _fredcy$elm_tangram_svg$Piece_Types$Position = F2(
+	function (a, b) {
+		return {x: a, y: b};
+	});
+var _fredcy$elm_tangram_svg$Piece_Types$Context = F2(
+	function (a, b) {
+		return {shift: a, size: b};
+	});
+var _fredcy$elm_tangram_svg$Piece_Types$Rotating = function (a) {
+	return {ctor: 'Rotating', _0: a};
+};
+var _fredcy$elm_tangram_svg$Piece_Types$Dragging = function (a) {
+	return {ctor: 'Dragging', _0: a};
+};
+var _fredcy$elm_tangram_svg$Piece_Types$DragEnd = function (a) {
+	return {ctor: 'DragEnd', _0: a};
+};
+var _fredcy$elm_tangram_svg$Piece_Types$DragAt = function (a) {
+	return {ctor: 'DragAt', _0: a};
+};
+var _fredcy$elm_tangram_svg$Piece_Types$DragStart = function (a) {
+	return {ctor: 'DragStart', _0: a};
+};
+var _fredcy$elm_tangram_svg$Piece_Types$Parallelogram = F2(
+	function (a, b) {
+		return {ctor: 'Parallelogram', _0: a, _1: b};
+	});
+var _fredcy$elm_tangram_svg$Piece_Types$Square = F2(
+	function (a, b) {
+		return {ctor: 'Square', _0: a, _1: b};
+	});
+var _fredcy$elm_tangram_svg$Piece_Types$Triangle = F2(
+	function (a, b) {
+		return {ctor: 'Triangle', _0: a, _1: b};
+	});
+
+var _fredcy$elm_tangram_svg$Piece_Model$subscriptions = function (model) {
+	var _p0 = model.drag;
+	if (_p0.ctor === 'Nothing') {
+		return _elm_lang$core$Platform_Sub$none;
+	} else {
+		return _elm_lang$core$Platform_Sub$batch(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$mouse$Mouse$moves(_fredcy$elm_tangram_svg$Piece_Types$DragAt),
+					_elm_lang$mouse$Mouse$ups(_fredcy$elm_tangram_svg$Piece_Types$DragEnd)
+				]));
+	}
+};
+var _fredcy$elm_tangram_svg$Piece_Model$vectorDiff = F2(
+	function (v1, v2) {
+		return {x: v2.x - v1.x, y: v2.y - v1.y};
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$vectorAngle = function (v) {
+	return A2(
+		_elm_lang$core$Basics$atan2,
+		_elm_lang$core$Basics$toFloat(v.x),
+		_elm_lang$core$Basics$toFloat(v.y));
+};
+var _fredcy$elm_tangram_svg$Piece_Model$relativeRotation = F3(
+	function (start, sample, current) {
+		var currentAngle = _fredcy$elm_tangram_svg$Piece_Model$vectorAngle(
+			A2(_fredcy$elm_tangram_svg$Piece_Model$vectorDiff, current, start));
+		var sampleAngle = _fredcy$elm_tangram_svg$Piece_Model$vectorAngle(
+			A2(_fredcy$elm_tangram_svg$Piece_Model$vectorDiff, sample, start));
+		return currentAngle - sampleAngle;
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$getRotation = function (_p1) {
+	var _p2 = _p1;
+	var _p5 = _p2.rotation;
+	var _p3 = _p2.drag;
+	if ((_p3.ctor === 'Just') && (_p3._0.ctor === 'Rotating')) {
+		var _p4 = _p3._0._0.sample;
+		if (_p4.ctor === 'Just') {
+			return _p5 - A3(_fredcy$elm_tangram_svg$Piece_Model$relativeRotation, _p2.position, _p4._0, _p3._0._0.current);
+		} else {
+			return _p5;
+		}
+	} else {
+		return _p5;
+	}
+};
+var _fredcy$elm_tangram_svg$Piece_Model$rotating = function (model) {
+	var _p6 = model.drag;
+	if ((_p6.ctor === 'Just') && (_p6._0.ctor === 'Rotating')) {
+		return true;
+	} else {
+		return false;
+	}
+};
+var _fredcy$elm_tangram_svg$Piece_Model$getPosition = function (_p7) {
+	var _p8 = _p7;
+	var _p12 = _p8.position;
+	var _p9 = _p8.drag;
+	if ((_p9.ctor === 'Just') && (_p9._0.ctor === 'Dragging')) {
+		var _p11 = _p9._0._0.start;
+		var _p10 = _p9._0._0.current;
+		return A2(_fredcy$elm_tangram_svg$Piece_Types$Position, (_p12.x + _p10.x) - _p11.x, (_p12.y + _p10.y) - _p11.y);
+	} else {
+		return _p12;
+	}
+};
+var _fredcy$elm_tangram_svg$Piece_Model$withLocation = F2(
+	function (_p13, piece) {
+		var _p14 = _p13;
+		return _elm_lang$core$Native_Utils.update(
+			piece,
+			{position: _p14.position, rotation: _p14.rotation});
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$positionDecoder = A3(
+	_elm_lang$core$Json_Decode$object2,
+	_fredcy$elm_tangram_svg$Piece_Types$Position,
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'x', _elm_lang$core$Json_Decode$int),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'y', _elm_lang$core$Json_Decode$int));
+var _fredcy$elm_tangram_svg$Piece_Model$positionEncoder = function (position) {
+	return _elm_lang$core$Json_Encode$object(
+		_elm_lang$core$Native_List.fromArray(
+			[
+				{
+				ctor: '_Tuple2',
+				_0: 'x',
+				_1: _elm_lang$core$Json_Encode$int(position.x)
+			},
+				{
+				ctor: '_Tuple2',
+				_0: 'y',
+				_1: _elm_lang$core$Json_Encode$int(position.y)
+			}
+			]));
+};
+var _fredcy$elm_tangram_svg$Piece_Model$locationEncoder = function (model) {
+	return _elm_lang$core$Json_Encode$object(
+		_elm_lang$core$Native_List.fromArray(
+			[
+				{
+				ctor: '_Tuple2',
+				_0: 'position',
+				_1: _fredcy$elm_tangram_svg$Piece_Model$positionEncoder(model.position)
+			},
+				{
+				ctor: '_Tuple2',
+				_0: 'rotation',
+				_1: _elm_lang$core$Json_Encode$float(model.rotation)
+			}
+			]));
+};
+var _fredcy$elm_tangram_svg$Piece_Model$Model = F5(
+	function (a, b, c, d, e) {
+		return {shape: a, position: b, rotation: c, drag: d, origin: e};
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$init = F3(
+	function (shape, position, rotation) {
+		return A5(
+			_fredcy$elm_tangram_svg$Piece_Model$Model,
+			shape,
+			position,
+			_elm_lang$core$Basics$degrees(rotation),
+			_elm_lang$core$Maybe$Nothing,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 0, 0));
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$Location = F2(
+	function (a, b) {
+		return {position: a, rotation: b};
+	});
+var _fredcy$elm_tangram_svg$Piece_Model$locationDecoder = A3(
+	_elm_lang$core$Json_Decode$object2,
+	_fredcy$elm_tangram_svg$Piece_Model$Location,
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'position', _fredcy$elm_tangram_svg$Piece_Model$positionDecoder),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'rotation', _elm_lang$core$Json_Decode$float));
+
+var _fredcy$elm_tangram_svg$Piece_Update$restrictTo = F2(
+	function (_p1, _p0) {
+		var _p2 = _p1;
+		var _p3 = _p0;
+		return {
+			x: A3(_elm_lang$core$Basics$clamp, 0, _p2.width, _p3.x),
+			y: A3(_elm_lang$core$Basics$clamp, 0, _p2.height, _p3.y)
+		};
+	});
+var _fredcy$elm_tangram_svg$Piece_Update$positionDiff = F2(
+	function (origin, pos) {
+		return A2(_fredcy$elm_tangram_svg$Piece_Types$Position, pos.x - origin.x, pos.y - origin.y);
+	});
+var _fredcy$elm_tangram_svg$Piece_Update$updateHelp = F3(
 	function (context, msg, model) {
 		var _p4 = msg;
 		switch (_p4.ctor) {
 			case 'DragStart':
-				var _p5 = _p4._0;
+				var _p5 = _p4._0._1;
+				var svgOrigin = A2(
+					_elm_lang$core$Debug$log,
+					'svgOrigin',
+					A2(_fredcy$elm_tangram_svg$Piece_Update$positionDiff, _p5, _p4._0._0));
 				return context.shift ? _elm_lang$core$Native_Utils.update(
 					model,
 					{
 						drag: _elm_lang$core$Maybe$Just(
-							_user$project$Piece_Types$Rotating(
-								{start: _p5, current: _p5, sample: _elm_lang$core$Maybe$Nothing}))
+							_fredcy$elm_tangram_svg$Piece_Types$Rotating(
+								{start: _p5, current: _p5, sample: _elm_lang$core$Maybe$Nothing})),
+						origin: svgOrigin
 					}) : _elm_lang$core$Native_Utils.update(
 					model,
 					{
 						drag: _elm_lang$core$Maybe$Just(
-							_user$project$Piece_Types$Dragging(
-								{start: _p5, current: _p5}))
+							_fredcy$elm_tangram_svg$Piece_Types$Dragging(
+								{start: _p5, current: _p5})),
+						origin: svgOrigin
 					});
 			case 'DragAt':
-				var _p8 = _p4._0;
+				var xySvg = A2(_fredcy$elm_tangram_svg$Piece_Update$positionDiff, model.origin, _p4._0);
 				var drag = function () {
 					var _p6 = model.drag;
 					if (_p6.ctor === 'Nothing') {
@@ -8412,18 +8604,18 @@ var _user$project$Piece_Update$updateHelp = F3(
 					} else {
 						if (_p6._0.ctor === 'Dragging') {
 							return _elm_lang$core$Maybe$Just(
-								_user$project$Piece_Types$Dragging(
-									{start: _p6._0._0.start, current: _p8}));
+								_fredcy$elm_tangram_svg$Piece_Types$Dragging(
+									{start: _p6._0._0.start, current: xySvg}));
 						} else {
 							var _p7 = _p6._0._0;
 							var sample = (_elm_lang$core$Native_Utils.eq(_p7.sample, _elm_lang$core$Maybe$Nothing) && (_elm_lang$core$Native_Utils.cmp(
-								A2(_user$project$Piece_Update$distance, _p7.start, _p8),
-								20) > 0)) ? _elm_lang$core$Maybe$Just(_p8) : _p7.sample;
+								A2(_fredcy$elm_tangram_svg$Piece_Types$distance, _p7.start, xySvg),
+								2) > 0)) ? _elm_lang$core$Maybe$Just(xySvg) : _p7.sample;
 							return _elm_lang$core$Maybe$Just(
-								_user$project$Piece_Types$Rotating(
+								_fredcy$elm_tangram_svg$Piece_Types$Rotating(
 									_elm_lang$core$Native_Utils.update(
 										_p7,
-										{current: _p8, sample: sample})));
+										{current: xySvg, sample: sample})));
 						}
 					}
 				}();
@@ -8435,64 +8627,198 @@ var _user$project$Piece_Update$updateHelp = F3(
 					model,
 					{
 						position: A2(
-							_user$project$Piece_Update$restrictTo,
+							_fredcy$elm_tangram_svg$Piece_Update$restrictTo,
 							context.size,
-							_user$project$Piece_Model$getPosition(model)),
-						rotation: _user$project$Piece_Model$getRotation(model),
+							_fredcy$elm_tangram_svg$Piece_Model$getPosition(model)),
+						rotation: _fredcy$elm_tangram_svg$Piece_Model$getRotation(model),
 						drag: _elm_lang$core$Maybe$Nothing
 					});
 		}
 	});
-var _user$project$Piece_Update$update = F3(
+var _fredcy$elm_tangram_svg$Piece_Update$update = F3(
 	function (context, msg, model) {
-		var model$ = A3(_user$project$Piece_Update$updateHelp, context, msg, model);
+		var model$ = A3(_fredcy$elm_tangram_svg$Piece_Update$updateHelp, context, msg, model);
 		return {ctor: '_Tuple2', _0: model$, _1: _elm_lang$core$Platform_Cmd$none};
 	});
 
-var _user$project$Piece_View$pointsToString = function (list) {
+var _fredcy$elm_tangram_svg$Piece_View$toPosition = function (_p0) {
+	var _p1 = _p0;
+	return A2(
+		_fredcy$elm_tangram_svg$Piece_Types$Position,
+		_elm_lang$core$Basics$round(_p1._0),
+		_elm_lang$core$Basics$round(_p1._1));
+};
+var _fredcy$elm_tangram_svg$Piece_View$toPoint = function (position) {
+	return {
+		ctor: '_Tuple2',
+		_0: _elm_lang$core$Basics$toFloat(position.x),
+		_1: _elm_lang$core$Basics$toFloat(position.y)
+	};
+};
+var _fredcy$elm_tangram_svg$Piece_View$pointsToString = function (list) {
 	return A2(
 		_elm_lang$core$String$join,
 		' ',
 		A2(
 			_elm_lang$core$List$map,
-			function (_p0) {
-				var _p1 = _p0;
+			function (_p2) {
+				var _p3 = _p2;
 				return A2(
 					_elm_lang$core$Basics_ops['++'],
-					_elm_lang$core$Basics$toString(_p1._0),
+					_elm_lang$core$Basics$toString(_p3._0),
 					A2(
 						_elm_lang$core$Basics_ops['++'],
 						' ',
-						_elm_lang$core$Basics$toString(_p1._1)));
+						_elm_lang$core$Basics$toString(_p3._1)));
 			},
 			list));
 };
-var _user$project$Piece_View$translatePoint = F2(
-	function (_p3, _p2) {
-		var _p4 = _p3;
-		var _p5 = _p2;
-		return {ctor: '_Tuple2', _0: _p5._0 + _p4._0, _1: _p5._1 + _p4._1};
+var _fredcy$elm_tangram_svg$Piece_View$translatePoint = F2(
+	function (_p5, _p4) {
+		var _p6 = _p5;
+		var _p7 = _p4;
+		return {ctor: '_Tuple2', _0: _p7._0 + _p6._0, _1: _p7._1 + _p6._1};
 	});
-var _user$project$Piece_View$scalePoint = F2(
-	function (factor, _p6) {
-		var _p7 = _p6;
-		return {ctor: '_Tuple2', _0: _p7._0 * factor, _1: _p7._1 * factor};
-	});
-var _user$project$Piece_View$rotatePoint = F2(
-	function (angle, _p8) {
+var _fredcy$elm_tangram_svg$Piece_View$scalePoint = F2(
+	function (factor, _p8) {
 		var _p9 = _p8;
-		var _p11 = _p9._1;
-		var _p10 = _p9._0;
-		var y$ = (_p10 * _elm_lang$core$Basics$sin(angle)) + (_p11 * _elm_lang$core$Basics$cos(angle));
-		var x$ = (_p10 * _elm_lang$core$Basics$cos(angle)) - (_p11 * _elm_lang$core$Basics$sin(angle));
+		return {ctor: '_Tuple2', _0: _p9._0 * factor, _1: _p9._1 * factor};
+	});
+var _fredcy$elm_tangram_svg$Piece_View$rotatePoint = F2(
+	function (angle, _p10) {
+		var _p11 = _p10;
+		var _p13 = _p11._1;
+		var _p12 = _p11._0;
+		var y$ = (_p12 * _elm_lang$core$Basics$sin(angle)) + (_p13 * _elm_lang$core$Basics$cos(angle));
+		var x$ = (_p12 * _elm_lang$core$Basics$cos(angle)) - (_p13 * _elm_lang$core$Basics$sin(angle));
 		return {ctor: '_Tuple2', _0: x$, _1: y$};
 	});
-var _user$project$Piece_View$polygon = F6(
-	function (shape, color, scale, rotation, position, drag) {
+var _fredcy$elm_tangram_svg$Piece_View$ds = F2(
+	function (tag, values) {
+		return A2(
+			_elm_lang$core$Basics_ops['++'],
+			tag,
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				' ',
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					A2(
+						_elm_lang$core$String$join,
+						' ',
+						A2(_elm_lang$core$List$map, _elm_lang$core$Basics$toString, values)),
+					' ')));
+	});
+var _fredcy$elm_tangram_svg$Piece_View$handleArc = F2(
+	function (center, end) {
+		var arcAngle = _elm_lang$core$Basics$degrees(20);
+		var centerPt = _fredcy$elm_tangram_svg$Piece_View$toPoint(center);
+		var arcbegin = A2(
+			_fredcy$elm_tangram_svg$Piece_View$translatePoint,
+			centerPt,
+			A2(
+				_fredcy$elm_tangram_svg$Piece_View$rotatePoint,
+				(0 - arcAngle) / 2,
+				A2(
+					_fredcy$elm_tangram_svg$Piece_View$translatePoint,
+					A2(_fredcy$elm_tangram_svg$Piece_View$scalePoint, -1, centerPt),
+					_fredcy$elm_tangram_svg$Piece_View$toPoint(end))));
+		var arcend = _fredcy$elm_tangram_svg$Piece_View$toPosition(
+			A2(
+				_fredcy$elm_tangram_svg$Piece_View$translatePoint,
+				centerPt,
+				A2(
+					_fredcy$elm_tangram_svg$Piece_View$rotatePoint,
+					arcAngle / 2,
+					A2(
+						_fredcy$elm_tangram_svg$Piece_View$translatePoint,
+						A2(_fredcy$elm_tangram_svg$Piece_View$scalePoint, -1, centerPt),
+						_fredcy$elm_tangram_svg$Piece_View$toPoint(end)))));
+		var radius = A2(_fredcy$elm_tangram_svg$Piece_Types$distance, center, end);
+		var dVal = A2(
+			_elm_lang$core$Debug$log,
+			'dVal',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				A2(
+					_fredcy$elm_tangram_svg$Piece_View$ds,
+					'M',
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$core$Basics$fst(arcbegin),
+							_elm_lang$core$Basics$snd(arcbegin)
+						])),
+				A2(
+					_fredcy$elm_tangram_svg$Piece_View$ds,
+					'A',
+					_elm_lang$core$Native_List.fromArray(
+						[
+							radius,
+							radius,
+							0,
+							0,
+							1,
+							_elm_lang$core$Basics$toFloat(arcend.x),
+							_elm_lang$core$Basics$toFloat(arcend.y)
+						]))));
+		return A2(
+			_elm_lang$svg$Svg$path,
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$svg$Svg_Attributes$d(dVal),
+					_elm_lang$svg$Svg_Attributes$style('stroke:rgb(255,0,0);stroke-width:2;fill:none')
+				]),
+			_elm_lang$core$Native_List.fromArray(
+				[]));
+	});
+var _fredcy$elm_tangram_svg$Piece_View$rotateHandle = F2(
+	function (center, end) {
+		return A2(
+			_elm_lang$svg$Svg$svg,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A2(
+					_elm_lang$svg$Svg$line,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$svg$Svg_Attributes$x1(
+							_elm_lang$core$Basics$toString(center.x)),
+							_elm_lang$svg$Svg_Attributes$y1(
+							_elm_lang$core$Basics$toString(center.y)),
+							_elm_lang$svg$Svg_Attributes$x2(
+							_elm_lang$core$Basics$toString(end.x)),
+							_elm_lang$svg$Svg_Attributes$y2(
+							_elm_lang$core$Basics$toString(end.y)),
+							_elm_lang$svg$Svg_Attributes$style('stroke:rgb(255,0,0);stroke-width:2')
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					A2(_fredcy$elm_tangram_svg$Piece_View$handleArc, center, end)
+				]));
+	});
+var _fredcy$elm_tangram_svg$Piece_View$polygon = F6(
+	function (shape, color, scale, rotation, _p14, drag) {
+		var _p15 = _p14;
+		var handle = function () {
+			var _p16 = drag;
+			if ((_p16.ctor === 'Just') && (_p16._0.ctor === 'Rotating')) {
+				return A2(
+					_fredcy$elm_tangram_svg$Piece_View$rotateHandle,
+					A2(
+						_fredcy$elm_tangram_svg$Piece_Types$Position,
+						_elm_lang$core$Basics$round(_p15._0),
+						_elm_lang$core$Basics$round(_p15._1)),
+					_p16._0._0.current);
+			} else {
+				return _elm_lang$svg$Svg$text('');
+			}
+		}();
 		var cursorVal = function () {
-			var _p12 = drag;
-			if (_p12.ctor === 'Just') {
-				if (_p12._0.ctor === 'Dragging') {
+			var _p17 = drag;
+			if (_p17.ctor === 'Just') {
+				if (_p17._0.ctor === 'Dragging') {
 					return 'move';
 				} else {
 					return 'crosshair';
@@ -8503,78 +8829,101 @@ var _user$project$Piece_View$polygon = F6(
 		}();
 		var vertices = A2(
 			_elm_lang$core$List$map,
-			function (_p13) {
+			function (_p18) {
 				return A2(
-					_user$project$Piece_View$translatePoint,
-					position,
+					_fredcy$elm_tangram_svg$Piece_View$translatePoint,
+					_p15,
 					A2(
-						_user$project$Piece_View$rotatePoint,
+						_fredcy$elm_tangram_svg$Piece_View$rotatePoint,
 						rotation,
-						A2(_user$project$Piece_View$scalePoint, scale, _p13)));
+						A2(_fredcy$elm_tangram_svg$Piece_View$scalePoint, scale, _p18)));
 			},
 			shape);
 		return A2(
-			_elm_lang$svg$Svg$polygon,
+			_elm_lang$svg$Svg$svg,
+			_elm_lang$core$Native_List.fromArray(
+				[]),
 			_elm_lang$core$Native_List.fromArray(
 				[
-					_elm_lang$svg$Svg_Attributes$points(
-					_user$project$Piece_View$pointsToString(vertices)),
-					_elm_lang$svg$Svg_Attributes$fill(
-					_user$project$Colors$toCss(color)),
-					_elm_lang$svg$Svg_Attributes$stroke('lightgray'),
-					_elm_lang$svg$Svg_Attributes$strokeWidth(
-					_elm_lang$core$Basics$toString(6)),
-					_elm_lang$svg$Svg_Attributes$strokeLinejoin('round'),
-					_elm_lang$svg$Svg_Attributes$cursor(cursorVal)
-				]),
-			_elm_lang$core$Native_List.fromArray(
-				[]));
+					A2(
+					_elm_lang$svg$Svg$polygon,
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_elm_lang$svg$Svg_Attributes$points(
+							_fredcy$elm_tangram_svg$Piece_View$pointsToString(vertices)),
+							_elm_lang$svg$Svg_Attributes$fill(
+							_fredcy$elm_tangram_svg$Colors$toCss(color)),
+							_elm_lang$svg$Svg_Attributes$stroke('lightgray'),
+							_elm_lang$svg$Svg_Attributes$strokeWidth(
+							_elm_lang$core$Basics$toString(6)),
+							_elm_lang$svg$Svg_Attributes$strokeLinejoin('round'),
+							_elm_lang$svg$Svg_Attributes$cursor(cursorVal)
+						]),
+					_elm_lang$core$Native_List.fromArray(
+						[])),
+					handle
+				]));
 	});
-var _user$project$Piece_View$paraPoints = _elm_lang$core$Native_List.fromArray(
+var _fredcy$elm_tangram_svg$Piece_View$paraPoints = _elm_lang$core$Native_List.fromArray(
 	[
 		{ctor: '_Tuple2', _0: 0.25, _1: -0.25},
 		{ctor: '_Tuple2', _0: -0.75, _1: -0.25},
 		{ctor: '_Tuple2', _0: -0.25, _1: 0.25},
 		{ctor: '_Tuple2', _0: 0.75, _1: 0.25}
 	]);
-var _user$project$Piece_View$squarePoints = _elm_lang$core$Native_List.fromArray(
+var _fredcy$elm_tangram_svg$Piece_View$squarePoints = _elm_lang$core$Native_List.fromArray(
 	[
 		{ctor: '_Tuple2', _0: 0, _1: -0.5},
 		{ctor: '_Tuple2', _0: 0.5, _1: 0},
 		{ctor: '_Tuple2', _0: 0, _1: 0.5},
 		{ctor: '_Tuple2', _0: -0.5, _1: 0}
 	]);
-var _user$project$Piece_View$trianglePoints = _elm_lang$core$Native_List.fromArray(
+var _fredcy$elm_tangram_svg$Piece_View$trianglePoints = _elm_lang$core$Native_List.fromArray(
 	[
 		{ctor: '_Tuple2', _0: 0, _1: -0.5},
 		{ctor: '_Tuple2', _0: 1, _1: 0.5},
 		{ctor: '_Tuple2', _0: -1, _1: 0.5}
 	]);
-var _user$project$Piece_View$view = function (model) {
+var _fredcy$elm_tangram_svg$Piece_View$offsetPosition = A3(
+	_elm_lang$core$Json_Decode$object2,
+	F2(
+		function (v0, v1) {
+			return {ctor: '_Tuple2', _0: v0, _1: v1};
+		}),
+	A3(
+		_elm_lang$core$Json_Decode$object2,
+		_fredcy$elm_tangram_svg$Piece_Types$Position,
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'pageX', _elm_lang$core$Json_Decode$int),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'pageY', _elm_lang$core$Json_Decode$int)),
+	A3(
+		_elm_lang$core$Json_Decode$object2,
+		_fredcy$elm_tangram_svg$Piece_Types$Position,
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetX', _elm_lang$core$Json_Decode$int),
+		A2(_elm_lang$core$Json_Decode_ops[':='], 'offsetY', _elm_lang$core$Json_Decode$int)));
+var _fredcy$elm_tangram_svg$Piece_View$view = function (model) {
 	var ds = model.drag;
-	var realRotation = _user$project$Piece_Model$getRotation(model);
-	var realPosition = _user$project$Piece_Model$getPosition(model);
-	return A3(
-		_elm_lang$svg$Svg$node,
-		'svg',
+	var realRotation = _fredcy$elm_tangram_svg$Piece_Model$getRotation(model);
+	var realPosition = _fredcy$elm_tangram_svg$Piece_Model$getPosition(model);
+	return A2(
+		_elm_lang$svg$Svg$svg,
 		_elm_lang$core$Native_List.fromArray(
 			[
 				A2(
 				_elm_lang$virtual_dom$VirtualDom$on,
 				'mousedown',
-				A2(_elm_lang$core$Json_Decode$map, _user$project$Piece_Types$DragStart, _elm_lang$mouse$Mouse$position))
+				A2(_elm_lang$core$Json_Decode$map, _fredcy$elm_tangram_svg$Piece_Types$DragStart, _fredcy$elm_tangram_svg$Piece_View$offsetPosition))
 			]),
 		_elm_lang$core$Native_List.fromArray(
 			[
 				function () {
-				var _p14 = model.shape;
-				switch (_p14.ctor) {
+				var _p19 = model.shape;
+				switch (_p19.ctor) {
 					case 'Triangle':
 						return A6(
-							_user$project$Piece_View$polygon,
-							_user$project$Piece_View$trianglePoints,
-							_p14._0,
-							_p14._1,
+							_fredcy$elm_tangram_svg$Piece_View$polygon,
+							_fredcy$elm_tangram_svg$Piece_View$trianglePoints,
+							_p19._0,
+							_p19._1,
 							realRotation,
 							{
 								ctor: '_Tuple2',
@@ -8584,10 +8933,10 @@ var _user$project$Piece_View$view = function (model) {
 							ds);
 					case 'Square':
 						return A6(
-							_user$project$Piece_View$polygon,
-							_user$project$Piece_View$squarePoints,
-							_p14._0,
-							_p14._1,
+							_fredcy$elm_tangram_svg$Piece_View$polygon,
+							_fredcy$elm_tangram_svg$Piece_View$squarePoints,
+							_p19._0,
+							_p19._1,
 							realRotation,
 							{
 								ctor: '_Tuple2',
@@ -8597,10 +8946,10 @@ var _user$project$Piece_View$view = function (model) {
 							ds);
 					default:
 						return A6(
-							_user$project$Piece_View$polygon,
-							_user$project$Piece_View$paraPoints,
-							_p14._0,
-							_p14._1,
+							_fredcy$elm_tangram_svg$Piece_View$polygon,
+							_fredcy$elm_tangram_svg$Piece_View$paraPoints,
+							_p19._0,
+							_p19._1,
 							realRotation,
 							{
 								ctor: '_Tuple2',
@@ -8613,91 +8962,328 @@ var _user$project$Piece_View$view = function (model) {
 			]));
 };
 
-var _user$project$Types$Error = {ctor: 'Error'};
-var _user$project$Types$KeyUp = function (a) {
+// Code borrowed shamelessly from https://github.com/w0rm/elm-flatris
+
+var _fredcy$localstorage$Native_LocalStorage = function()
+{
+    function storageAvailable(type) {
+	try {
+	    var storage = window[type],
+		x = '__storage_test__';
+	    storage.setItem(x, x);
+	    storage.removeItem(x);
+	    return true;
+	}
+	catch(e) {
+	    return false;
+	}
+    }
+
+    // shorthand for native APIs
+    var unit = {ctor: '_Tuple0'};
+    var nativeBinding = _elm_lang$core$Native_Scheduler.nativeBinding;
+    var succeed = _elm_lang$core$Native_Scheduler.succeed;
+    var fail = _elm_lang$core$Native_Scheduler.fail;
+    var Nothing = _elm_lang$core$Maybe$Nothing;
+    var Just = _elm_lang$core$Maybe$Just;
+    
+
+    function set(key, value) {
+        return nativeBinding(function(callback) {
+            try {
+                localStorage.setItem(key, value);
+                return callback(succeed( unit ));
+            } catch (e) {
+                return callback(fail( {'ctor': 'Overflow'} ));
+            }
+        });
+    }
+
+
+    function get (key) {
+        return nativeBinding(function(callback) {
+            var value = localStorage.getItem(key);
+            return callback(succeed(
+                (value === null) ? Nothing : Just(value)
+            ));
+        });
+    }
+    
+
+    function remove (key) {
+        return nativeBinding(function(callback) {
+            localStorage.removeItem(key);
+            return callback(succeed( unit ));
+        });
+    }
+    
+
+    var keys = nativeBinding(function(callback) {
+        var _keys = [];
+        for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i);
+            _keys.push(key);
+        }
+        return callback(succeed(
+            _elm_lang$core$Native_List.fromArray( _keys )
+        ));
+    });
+
+
+    var clear = nativeBinding(function(callback) {
+        localStorage.clear();
+        return callback(succeed( unit ));
+    });
+
+
+    var storageFail = nativeBinding(function(callback) {
+            return callback(fail( {ctor: 'NoStorage'} ));
+    });
+    
+
+    if (storageAvailable('localStorage')) {
+        return {
+            get: get,
+            set: F2(set),
+            remove: remove,
+            clear: clear,
+            keys: keys,
+        }
+    }
+    else {
+        return {
+            get: storageFail,
+            set: storageFail,
+            remove: storageFail,
+            clear: storageFail,
+            keys: storageFail,
+        }
+    }
+
+}();
+
+var _fredcy$localstorage$LocalStorage_ops = _fredcy$localstorage$LocalStorage_ops || {};
+_fredcy$localstorage$LocalStorage_ops['&>'] = F2(
+	function (t1, t2) {
+		return A2(
+			_elm_lang$core$Task$andThen,
+			t1,
+			function (_p0) {
+				return t2;
+			});
+	});
+var _fredcy$localstorage$LocalStorage$onSelfMsg = F3(
+	function (router, dimensions, state) {
+		var _p1 = state;
+		if (_p1.ctor === 'Nothing') {
+			return _elm_lang$core$Task$succeed(state);
+		} else {
+			var send = function (_p2) {
+				var _p3 = _p2;
+				return A2(
+					_elm_lang$core$Platform$sendToApp,
+					router,
+					_p3._0(dimensions));
+			};
+			return A2(
+				_fredcy$localstorage$LocalStorage_ops['&>'],
+				_elm_lang$core$Task$sequence(
+					A2(_elm_lang$core$List$map, send, _p1._0.subs)),
+				_elm_lang$core$Task$succeed(state));
+		}
+	});
+var _fredcy$localstorage$LocalStorage$init = _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+var _fredcy$localstorage$LocalStorage$keys = _fredcy$localstorage$Native_LocalStorage.keys;
+var _fredcy$localstorage$LocalStorage$clear = _fredcy$localstorage$Native_LocalStorage.clear;
+var _fredcy$localstorage$LocalStorage$remove = _fredcy$localstorage$Native_LocalStorage.remove;
+var _fredcy$localstorage$LocalStorage$set = _fredcy$localstorage$Native_LocalStorage.set;
+var _fredcy$localstorage$LocalStorage$get = _fredcy$localstorage$Native_LocalStorage.get;
+var _fredcy$localstorage$LocalStorage$subscription = _elm_lang$core$Native_Platform.leaf('LocalStorage');
+var _fredcy$localstorage$LocalStorage$Event = F4(
+	function (a, b, c, d) {
+		return {key: a, oldValue: b, newValue: c, url: d};
+	});
+var _fredcy$localstorage$LocalStorage$event = A5(
+	_elm_lang$core$Json_Decode$object4,
+	_fredcy$localstorage$LocalStorage$Event,
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'key', _elm_lang$core$Json_Decode$string),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'oldValue', _elm_lang$core$Json_Decode$string),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'newValue', _elm_lang$core$Json_Decode$string),
+	A2(_elm_lang$core$Json_Decode_ops[':='], 'url', _elm_lang$core$Json_Decode$string));
+var _fredcy$localstorage$LocalStorage$onEffects = F3(
+	function (router, newSubs, oldState) {
+		var _p4 = {ctor: '_Tuple2', _0: oldState, _1: newSubs};
+		if (_p4._0.ctor === 'Nothing') {
+			if (_p4._1.ctor === '[]') {
+				return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+			} else {
+				return A2(
+					_elm_lang$core$Task$andThen,
+					_elm_lang$core$Process$spawn(
+						A3(
+							_elm_lang$dom$Dom_LowLevel$onWindow,
+							'storage',
+							_fredcy$localstorage$LocalStorage$event,
+							_elm_lang$core$Platform$sendToSelf(router))),
+					function (pid) {
+						return _elm_lang$core$Task$succeed(
+							_elm_lang$core$Maybe$Just(
+								{subs: newSubs, pid: pid}));
+					});
+			}
+		} else {
+			if (_p4._1.ctor === '[]') {
+				return A2(
+					_fredcy$localstorage$LocalStorage_ops['&>'],
+					_elm_lang$core$Process$kill(_p4._0._0.pid),
+					_elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing));
+			} else {
+				return _elm_lang$core$Task$succeed(
+					_elm_lang$core$Maybe$Just(
+						{subs: newSubs, pid: _p4._0._0.pid}));
+			}
+		}
+	});
+var _fredcy$localstorage$LocalStorage$Overflow = {ctor: 'Overflow'};
+var _fredcy$localstorage$LocalStorage$UnexpectedPayload = function (a) {
+	return {ctor: 'UnexpectedPayload', _0: a};
+};
+var _fredcy$localstorage$LocalStorage$fromJson = F2(
+	function (decoder, str) {
+		var _p5 = A2(_elm_lang$core$Json_Decode$decodeString, decoder, str);
+		if (_p5.ctor === 'Ok') {
+			return _elm_lang$core$Task$succeed(
+				_elm_lang$core$Maybe$Just(_p5._0));
+		} else {
+			return _elm_lang$core$Task$fail(
+				_fredcy$localstorage$LocalStorage$UnexpectedPayload(_p5._0));
+		}
+	});
+var _fredcy$localstorage$LocalStorage$getJson = F2(
+	function (decoder, key) {
+		var decode = function (maybe) {
+			var _p6 = maybe;
+			if (_p6.ctor === 'Just') {
+				return A2(_fredcy$localstorage$LocalStorage$fromJson, decoder, _p6._0);
+			} else {
+				return _elm_lang$core$Task$succeed(_elm_lang$core$Maybe$Nothing);
+			}
+		};
+		return A2(
+			_elm_lang$core$Task$andThen,
+			_fredcy$localstorage$LocalStorage$get(key),
+			decode);
+	});
+var _fredcy$localstorage$LocalStorage$NoStorage = {ctor: 'NoStorage'};
+var _fredcy$localstorage$LocalStorage$MySub = function (a) {
+	return {ctor: 'MySub', _0: a};
+};
+var _fredcy$localstorage$LocalStorage$changes = function (tagger) {
+	return _fredcy$localstorage$LocalStorage$subscription(
+		_fredcy$localstorage$LocalStorage$MySub(tagger));
+};
+var _fredcy$localstorage$LocalStorage$subMap = F2(
+	function (func, _p7) {
+		var _p8 = _p7;
+		return _fredcy$localstorage$LocalStorage$MySub(
+			function (_p9) {
+				return func(
+					_p8._0(_p9));
+			});
+	});
+_elm_lang$core$Native_Platform.effectManagers['LocalStorage'] = {pkg: 'fredcy/localstorage', init: _fredcy$localstorage$LocalStorage$init, onEffects: _fredcy$localstorage$LocalStorage$onEffects, onSelfMsg: _fredcy$localstorage$LocalStorage$onSelfMsg, tag: 'sub', subMap: _fredcy$localstorage$LocalStorage$subMap};
+
+var _fredcy$elm_tangram_svg$Types$NoOp = {ctor: 'NoOp'};
+var _fredcy$elm_tangram_svg$Types$Error = {ctor: 'Error'};
+var _fredcy$elm_tangram_svg$Types$Reset = {ctor: 'Reset'};
+var _fredcy$elm_tangram_svg$Types$GetLayout = function (a) {
+	return {ctor: 'GetLayout', _0: a};
+};
+var _fredcy$elm_tangram_svg$Types$KeyUp = function (a) {
 	return {ctor: 'KeyUp', _0: a};
 };
-var _user$project$Types$KeyDown = function (a) {
+var _fredcy$elm_tangram_svg$Types$KeyDown = function (a) {
 	return {ctor: 'KeyDown', _0: a};
 };
-var _user$project$Types$WindowSize = function (a) {
+var _fredcy$elm_tangram_svg$Types$WindowSize = function (a) {
 	return {ctor: 'WindowSize', _0: a};
 };
-var _user$project$Types$PieceMsg = F2(
+var _fredcy$elm_tangram_svg$Types$PieceMsg = F2(
 	function (a, b) {
 		return {ctor: 'PieceMsg', _0: a, _1: b};
 	});
 
-var _user$project$Model$init = function () {
-	var pieces = _elm_lang$core$Native_List.fromArray(
-		[
-			{
-			ctor: '_Tuple2',
-			_0: 'bigTri1',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Triangle, _user$project$Colors$elmTurquoise, 100.0),
-				A2(_user$project$Piece_Types$Position, 200, 300),
-				0)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'bigTri2',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Triangle, _user$project$Colors$elmGray, 100.0),
-				A2(_user$project$Piece_Types$Position, 150, 250),
-				90)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'medTri',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(
-					_user$project$Piece_Types$Triangle,
-					_user$project$Colors$elmTurquoise,
-					100.0 / _elm_lang$core$Basics$sqrt(2)),
-				A2(_user$project$Piece_Types$Position, 275, 175),
-				45)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'smTri1',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Triangle, _user$project$Colors$elmOrange, 100.0 / 2),
-				A2(_user$project$Piece_Types$Position, 275, 300),
-				-90)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'smTri2',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Triangle, _user$project$Colors$elmOrange, 100.0 / 2),
-				A2(_user$project$Piece_Types$Position, 200, 225),
-				180)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'square',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Square, _user$project$Colors$elmGreen, 100.0),
-				A2(_user$project$Piece_Types$Position, 250, 250),
-				180)
-		},
-			{
-			ctor: '_Tuple2',
-			_0: 'para',
-			_1: A3(
-				_user$project$Piece_Model$init,
-				A2(_user$project$Piece_Types$Parallelogram, _user$project$Colors$elmGreen, 100.0),
-				A2(_user$project$Piece_Types$Position, 175, 175),
-				180)
-		}
-		]);
+var _fredcy$elm_tangram_svg$Model$tangramPieces = _elm_lang$core$Native_List.fromArray(
+	[
+		{
+		ctor: '_Tuple2',
+		_0: 'bigTri1',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Triangle, _fredcy$elm_tangram_svg$Colors$elmTurquoise, 100.0),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 200, 300),
+			0)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'bigTri2',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Triangle, _fredcy$elm_tangram_svg$Colors$elmGray, 100.0),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 150, 250),
+			90)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'medTri',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(
+				_fredcy$elm_tangram_svg$Piece_Types$Triangle,
+				_fredcy$elm_tangram_svg$Colors$elmTurquoise,
+				100.0 / _elm_lang$core$Basics$sqrt(2)),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 275, 175),
+			45)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'smTri1',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Triangle, _fredcy$elm_tangram_svg$Colors$elmOrange, 100.0 / 2),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 275, 300),
+			-90)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'smTri2',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Triangle, _fredcy$elm_tangram_svg$Colors$elmOrange, 100.0 / 2),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 200, 225),
+			180)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'square',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Square, _fredcy$elm_tangram_svg$Colors$elmGreen, 100.0),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 250, 250),
+			180)
+	},
+		{
+		ctor: '_Tuple2',
+		_0: 'para',
+		_1: A3(
+			_fredcy$elm_tangram_svg$Piece_Model$init,
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Parallelogram, _fredcy$elm_tangram_svg$Colors$elmGreen, 100.0),
+			A2(_fredcy$elm_tangram_svg$Piece_Types$Position, 175, 175),
+			180)
+	}
+	]);
+var _fredcy$elm_tangram_svg$Model$init = function () {
+	var pieces = _fredcy$elm_tangram_svg$Model$tangramPieces;
 	return {
 		ctor: '_Tuple2',
 		_0: {
@@ -8705,50 +9291,121 @@ var _user$project$Model$init = function () {
 			size: A2(_elm_lang$window$Window$Size, 600, 600),
 			shift: false
 		},
-		_1: A3(
-			_elm_lang$core$Task$perform,
-			_elm_lang$core$Basics$always(_user$project$Types$Error),
-			_user$project$Types$WindowSize,
-			_elm_lang$window$Window$size)
+		_1: _elm_lang$core$Platform_Cmd$batch(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					A3(
+					_elm_lang$core$Task$perform,
+					_elm_lang$core$Basics$always(_fredcy$elm_tangram_svg$Types$Error),
+					_fredcy$elm_tangram_svg$Types$WindowSize,
+					_elm_lang$window$Window$size),
+					A3(
+					_elm_lang$core$Task$perform,
+					_elm_lang$core$Basics$always(_fredcy$elm_tangram_svg$Types$Error),
+					_fredcy$elm_tangram_svg$Types$GetLayout,
+					_fredcy$localstorage$LocalStorage$get('tangram'))
+				]))
 	};
 }();
-var _user$project$Model$Model = F3(
+var _fredcy$elm_tangram_svg$Model$Model = F3(
 	function (a, b, c) {
 		return {pieces: a, size: b, shift: c};
 	});
 
-var _user$project$Update$updatePieces = F4(
+var _fredcy$elm_tangram_svg$Update$updateLocation = F2(
+	function (_p0, model) {
+		var _p1 = _p0;
+		var updatePiece = function (_p2) {
+			var _p3 = _p2;
+			var _p5 = _p3._1;
+			var _p4 = _p3._0;
+			return _elm_lang$core$Native_Utils.eq(_p1._0, _p4) ? {
+				ctor: '_Tuple2',
+				_0: _p4,
+				_1: A2(_fredcy$elm_tangram_svg$Piece_Model$withLocation, _p1._1, _p5)
+			} : {ctor: '_Tuple2', _0: _p4, _1: _p5};
+		};
+		var pieces$ = A2(_elm_lang$core$List$map, updatePiece, model.pieces);
+		return _elm_lang$core$Native_Utils.update(
+			model,
+			{pieces: pieces$});
+	});
+var _fredcy$elm_tangram_svg$Update$locationsDecoder = _elm_lang$core$Json_Decode$list(
+	A3(
+		_elm_lang$core$Json_Decode$tuple2,
+		F2(
+			function (v0, v1) {
+				return {ctor: '_Tuple2', _0: v0, _1: v1};
+			}),
+		_elm_lang$core$Json_Decode$string,
+		_fredcy$elm_tangram_svg$Piece_Model$locationDecoder));
+var _fredcy$elm_tangram_svg$Update$updateLocations = F2(
+	function (locationsResult, model) {
+		var _p6 = locationsResult;
+		if (_p6.ctor === 'Ok') {
+			return A3(_elm_lang$core$List$foldr, _fredcy$elm_tangram_svg$Update$updateLocation, model, _p6._0);
+		} else {
+			return model;
+		}
+	});
+var _fredcy$elm_tangram_svg$Update$layoutEncoder = function (pieces) {
+	var help = function (_p7) {
+		var _p8 = _p7;
+		return _elm_lang$core$Json_Encode$list(
+			_elm_lang$core$Native_List.fromArray(
+				[
+					_elm_lang$core$Json_Encode$string(_p8._0),
+					_fredcy$elm_tangram_svg$Piece_Model$locationEncoder(_p8._1)
+				]));
+	};
+	return _elm_lang$core$Json_Encode$list(
+		A2(_elm_lang$core$List$map, help, pieces));
+};
+var _fredcy$elm_tangram_svg$Update$saveCmd = function (pieces) {
+	return A3(
+		_elm_lang$core$Task$perform,
+		_elm_lang$core$Basics$always(_fredcy$elm_tangram_svg$Types$Error),
+		_elm_lang$core$Basics$always(_fredcy$elm_tangram_svg$Types$NoOp),
+		A2(
+			_fredcy$localstorage$LocalStorage$set,
+			'tangram',
+			A2(
+				_elm_lang$core$Json_Encode$encode,
+				0,
+				_fredcy$elm_tangram_svg$Update$layoutEncoder(pieces))));
+};
+var _fredcy$elm_tangram_svg$Update$updatePieces = F4(
 	function (name, msg, context, items) {
 		var updatePiece = F2(
-			function (_p1, _p0) {
-				var _p2 = _p1;
-				var _p7 = _p2._0;
-				var _p3 = _p0;
-				var _p6 = _p3._0;
-				var _p5 = _p3._1;
-				if (_elm_lang$core$Native_Utils.eq(_p7, name)) {
-					var _p4 = A3(_user$project$Piece_Update$update, context, msg, _p2._1);
-					var piece$ = _p4._0;
-					var cmd = _p4._1;
+			function (_p10, _p9) {
+				var _p11 = _p10;
+				var _p16 = _p11._0;
+				var _p12 = _p9;
+				var _p15 = _p12._0;
+				var _p14 = _p12._1;
+				if (_elm_lang$core$Native_Utils.eq(_p16, name)) {
+					var _p13 = A3(_fredcy$elm_tangram_svg$Piece_Update$update, context, msg, _p11._1);
+					var piece$ = _p13._0;
+					var cmd = _p13._1;
 					return {
 						ctor: '_Tuple2',
 						_0: A2(
 							_elm_lang$core$List_ops['::'],
-							{ctor: '_Tuple2', _0: _p7, _1: piece$},
-							_p6),
+							{ctor: '_Tuple2', _0: _p16, _1: piece$},
+							_p15),
 						_1: A2(
 							_elm_lang$core$List_ops['::'],
 							A2(
 								_elm_lang$core$Platform_Cmd$map,
-								_user$project$Types$PieceMsg(name),
+								_fredcy$elm_tangram_svg$Types$PieceMsg(name),
 								cmd),
-							_p5)
+							_p14)
 					};
 				} else {
 					return {
 						ctor: '_Tuple2',
-						_0: A2(_elm_lang$core$List_ops['::'], _p2, _p6),
-						_1: _p5
+						_0: A2(_elm_lang$core$List_ops['::'], _p11, _p15),
+						_1: _p14
 					};
 				}
 			});
@@ -8764,26 +9421,30 @@ var _user$project$Update$updatePieces = F4(
 			},
 			items);
 	});
-var _user$project$Update$update = F2(
+var _fredcy$elm_tangram_svg$Update$update = F2(
 	function (msg, model) {
-		var _p8 = msg;
-		switch (_p8.ctor) {
+		var _p17 = A2(_elm_lang$core$Debug$log, 'msg', msg);
+		switch (_p17.ctor) {
 			case 'PieceMsg':
 				var context = {shift: model.shift, size: model.size};
-				var _p9 = A4(_user$project$Update$updatePieces, _p8._0, _p8._1, context, model.pieces);
-				var pieces$ = _p9._0;
-				var cmds = _p9._1;
+				var _p18 = A4(_fredcy$elm_tangram_svg$Update$updatePieces, _p17._0, _p17._1, context, model.pieces);
+				var pieces$ = _p18._0;
+				var cmds = _p18._1;
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model,
 						{pieces: pieces$}),
-					_1: _elm_lang$core$Platform_Cmd$batch(cmds)
+					_1: _elm_lang$core$Platform_Cmd$batch(
+						A2(
+							_elm_lang$core$List_ops['::'],
+							_fredcy$elm_tangram_svg$Update$saveCmd(pieces$),
+							cmds))
 				};
 			case 'WindowSize':
-				var _p10 = _p8._0;
-				var height = _p10.height - 300;
-				var width = _p10.width - 16;
+				var _p19 = _p17._0;
+				var height = _p19.height - 300;
+				var width = _p19.width - 16;
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
@@ -8796,25 +9457,67 @@ var _user$project$Update$update = F2(
 			case 'Error':
 				return {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
 			case 'KeyDown':
-				return _elm_lang$core$Native_Utils.eq(_p8._0, 16) ? {
+				return _elm_lang$core$Native_Utils.eq(_p17._0, 16) ? {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model,
 						{shift: true}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				} : {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
-			default:
-				return _elm_lang$core$Native_Utils.eq(_p8._0, 16) ? {
+			case 'KeyUp':
+				return _elm_lang$core$Native_Utils.eq(_p17._0, 16) ? {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model,
 						{shift: false}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				} : {ctor: '_Tuple2', _0: model, _1: _elm_lang$core$Platform_Cmd$none};
+			case 'Reset':
+				return A2(
+					_elm_lang$core$Platform_Cmd_ops['!'],
+					_elm_lang$core$Native_Utils.update(
+						model,
+						{pieces: _fredcy$elm_tangram_svg$Model$tangramPieces}),
+					_elm_lang$core$Native_List.fromArray(
+						[
+							_fredcy$elm_tangram_svg$Update$saveCmd(_fredcy$elm_tangram_svg$Model$tangramPieces)
+						]));
+			case 'GetLayout':
+				var _p20 = _p17._0;
+				if (_p20.ctor === 'Just') {
+					var locations = A2(_elm_lang$core$Json_Decode$decodeString, _fredcy$elm_tangram_svg$Update$locationsDecoder, _p20._0);
+					return A2(
+						_elm_lang$core$Platform_Cmd_ops['!'],
+						A2(_fredcy$elm_tangram_svg$Update$updateLocations, locations, model),
+						_elm_lang$core$Native_List.fromArray(
+							[]));
+				} else {
+					return A2(
+						_elm_lang$core$Platform_Cmd_ops['!'],
+						model,
+						_elm_lang$core$Native_List.fromArray(
+							[]));
+				}
+			default:
+				return A2(
+					_elm_lang$core$Platform_Cmd_ops['!'],
+					model,
+					_elm_lang$core$Native_List.fromArray(
+						[]));
 		}
 	});
 
-var _user$project$View$debugInfo = function (model) {
+var _fredcy$elm_tangram_svg$View$resetButton = A2(
+	_elm_lang$html$Html$button,
+	_elm_lang$core$Native_List.fromArray(
+		[
+			_elm_lang$html$Html_Events$onClick(_fredcy$elm_tangram_svg$Types$Reset)
+		]),
+	_elm_lang$core$Native_List.fromArray(
+		[
+			_elm_lang$html$Html$text('reset')
+		]));
+var _fredcy$elm_tangram_svg$View$debugInfo = function (model) {
 	return A2(
 		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
@@ -8853,16 +9556,16 @@ var _user$project$View$debugInfo = function (model) {
 					model.pieces))
 			]));
 };
-var _user$project$View$cursorVal = function (model) {
+var _fredcy$elm_tangram_svg$View$cursorVal = function (model) {
 	return A2(
 		_elm_lang$core$List$any,
 		function (_p1) {
-			return _user$project$Piece_Model$rotating(
+			return _fredcy$elm_tangram_svg$Piece_Model$rotating(
 				_elm_lang$core$Basics$snd(_p1));
 		},
 		model.pieces) ? 'crosshair' : 'default';
 };
-var _user$project$View$background = F3(
+var _fredcy$elm_tangram_svg$View$background = F3(
 	function (cursorV, w, h) {
 		return A2(
 			_elm_lang$svg$Svg$rect,
@@ -8878,14 +9581,14 @@ var _user$project$View$background = F3(
 			_elm_lang$core$Native_List.fromArray(
 				[]));
 	});
-var _user$project$View$pieceView = function (_p2) {
+var _fredcy$elm_tangram_svg$View$pieceView = function (_p2) {
 	var _p3 = _p2;
 	return A2(
 		_elm_lang$html$Html_App$map,
-		_user$project$Types$PieceMsg(_p3._0),
-		_user$project$Piece_View$view(_p3._1));
+		_fredcy$elm_tangram_svg$Types$PieceMsg(_p3._0),
+		_fredcy$elm_tangram_svg$Piece_View$view(_p3._1));
 };
-var _user$project$View$scene = function (model) {
+var _fredcy$elm_tangram_svg$View$scene = function (model) {
 	return A2(
 		_elm_lang$svg$Svg$svg,
 		_elm_lang$core$Native_List.fromArray(
@@ -8893,22 +9596,23 @@ var _user$project$View$scene = function (model) {
 				_elm_lang$svg$Svg_Attributes$width(
 				_elm_lang$core$Basics$toString(model.size.width)),
 				_elm_lang$svg$Svg_Attributes$height(
-				_elm_lang$core$Basics$toString(model.size.height))
+				_elm_lang$core$Basics$toString(model.size.height)),
+				_elm_lang$svg$Svg_Attributes$style('margin-left: 8px; margin-top: 10px')
 			]),
 		A2(
 			_elm_lang$core$List_ops['::'],
 			A4(
 				_elm_lang$svg$Svg_Lazy$lazy3,
-				_user$project$View$background,
-				_user$project$View$cursorVal(model),
+				_fredcy$elm_tangram_svg$View$background,
+				_fredcy$elm_tangram_svg$View$cursorVal(model),
 				model.size.width,
 				model.size.height),
 			A2(
 				_elm_lang$core$List$map,
-				_elm_lang$svg$Svg_Lazy$lazy(_user$project$View$pieceView),
+				_elm_lang$svg$Svg_Lazy$lazy(_fredcy$elm_tangram_svg$View$pieceView),
 				model.pieces)));
 };
-var _user$project$View$view = function (model) {
+var _fredcy$elm_tangram_svg$View$view = function (model) {
 	return A2(
 		_elm_lang$html$Html$div,
 		_elm_lang$core$Native_List.fromArray(
@@ -8921,7 +9625,7 @@ var _user$project$View$view = function (model) {
 					[]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						_elm_lang$html$Html$text('Elm drag&drop with SVG')
+						_elm_lang$html$Html$text('Elm Tangram: drag&drop with SVG')
 					])),
 				A2(
 				_elm_lang$html$Html$div,
@@ -8929,43 +9633,39 @@ var _user$project$View$view = function (model) {
 					[]),
 				_elm_lang$core$Native_List.fromArray(
 					[
-						_elm_lang$html$Html$text('Drag to move, shift-drag to rotate')
+						_elm_lang$html$Html$text('Drag to move, shift-drag to rotate. Saved to localStorage.')
 					])),
-				_user$project$View$scene(model)
+				_fredcy$elm_tangram_svg$View$scene(model),
+				_fredcy$elm_tangram_svg$View$resetButton
 			]));
 };
 
-var _user$project$Main$subscriptions = function (model) {
-	var keyUps = _elm_lang$keyboard$Keyboard$ups(_user$project$Types$KeyUp);
-	var keyDowns = _elm_lang$keyboard$Keyboard$downs(_user$project$Types$KeyDown);
-	var reSize = _elm_lang$window$Window$resizes(_user$project$Types$WindowSize);
+var _fredcy$elm_tangram_svg$Main$subscriptions = function (model) {
+	var keyUps = _elm_lang$keyboard$Keyboard$ups(_fredcy$elm_tangram_svg$Types$KeyUp);
+	var keyDowns = _elm_lang$keyboard$Keyboard$downs(_fredcy$elm_tangram_svg$Types$KeyDown);
+	var reSize = _elm_lang$window$Window$resizes(_fredcy$elm_tangram_svg$Types$WindowSize);
 	var mapSubs = function (_p0) {
 		var _p1 = _p0;
 		return A2(
 			_elm_lang$core$Platform_Sub$map,
-			_user$project$Types$PieceMsg(_p1._0),
-			_user$project$Piece_Model$subscriptions(_p1._1));
+			_fredcy$elm_tangram_svg$Types$PieceMsg(_p1._0),
+			_fredcy$elm_tangram_svg$Piece_Model$subscriptions(_p1._1));
 	};
 	return _elm_lang$core$Platform_Sub$batch(
 		A2(
-			_elm_lang$core$List_ops['::'],
-			keyUps,
-			A2(
-				_elm_lang$core$List_ops['::'],
-				keyDowns,
-				A2(
-					_elm_lang$core$List_ops['::'],
-					reSize,
-					A2(_elm_lang$core$List$map, mapSubs, model.pieces)))));
+			_elm_lang$core$Basics_ops['++'],
+			_elm_lang$core$Native_List.fromArray(
+				[keyUps, keyDowns, reSize]),
+			A2(_elm_lang$core$List$map, mapSubs, model.pieces)));
 };
-var _user$project$Main$main = {
+var _fredcy$elm_tangram_svg$Main$main = {
 	main: _elm_lang$html$Html_App$program(
-		{init: _user$project$Model$init, view: _user$project$View$view, update: _user$project$Update$update, subscriptions: _user$project$Main$subscriptions})
+		{init: _fredcy$elm_tangram_svg$Model$init, view: _fredcy$elm_tangram_svg$View$view, update: _fredcy$elm_tangram_svg$Update$update, subscriptions: _fredcy$elm_tangram_svg$Main$subscriptions})
 };
 
 var Elm = {};
 Elm['Main'] = Elm['Main'] || {};
-_elm_lang$core$Native_Platform.addPublicModule(Elm['Main'], 'Main', typeof _user$project$Main$main === 'undefined' ? null : _user$project$Main$main);
+_elm_lang$core$Native_Platform.addPublicModule(Elm['Main'], 'Main', typeof _fredcy$elm_tangram_svg$Main$main === 'undefined' ? null : _fredcy$elm_tangram_svg$Main$main);
 
 if (typeof define === "function" && define['amd'])
 {
