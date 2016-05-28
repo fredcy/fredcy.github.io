@@ -27,16 +27,16 @@ program init update view subscriptions =
 loop update view subscriptions model cmds =
     let
         _ =
-            cmds |> runtime.runCmds
+            cmds |> Runtime.runCmds
 
         _ =
-            view model |> runtime.displayHtml
+            view model |> Runtime.displayHtml
 			
         _ =
-            subscriptions model |> runtime.registerSubs
+            subscriptions model |> Runtime.registerSubs
 
         msg =
-            runtime.waitForMsg
+            Runtime.waitForMsg
 
         ( model', cmds' ) =
             update msg model
@@ -44,6 +44,6 @@ loop update view subscriptions model cmds =
         loop update view subscriptions model' cmds'
 
 
-{- The assumed `runtime` module executes the operations above,
+{- The assumed `Runtime` module executes the operations above,
 all having side-effects. -}
 ```
