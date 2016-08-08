@@ -130,7 +130,7 @@ onEffects router newSubs oldState =
 
 
 onSelfMsg : Platform.Router msg <b>Event</b> -> <b>Event</b> -> State msg -> Task Never (State msg)
-onSelfMsg router dimensions state =
+onSelfMsg router <b>dimensions</b> state =
     case state of
         Nothing ->
             Task.succeed state
@@ -138,7 +138,7 @@ onSelfMsg router dimensions state =
         Just { subs } ->
             let
                 send (MySub tagger) =
-                    Platform.sendToApp router (tagger dimensions)
+                    Platform.sendToApp router (tagger <b>dimensions</b>)
             in
                 Task.sequence (List.map send subs)
                     &> Task.succeed state
